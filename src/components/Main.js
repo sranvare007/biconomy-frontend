@@ -53,6 +53,7 @@ function Main() {
   const [selectedAddress, setSelectedAddress] = useState("");
   const [metaTxEnabled, setMetaTxEnabled] = useState(true);
   const [transactionHash, setTransactionHash] = useState("");
+  const [wait, setWait] = useState("");
 
 
   useEffect(() => {
@@ -112,6 +113,7 @@ function Main() {
 
   const onPermitAndSubmitEIP712 = async event => {
     if (newQuote != "" && contract) {
+      setWait("Preparing transaction")
       setTransactionHash("");
       if (metaTxEnabled) {
           const daiPermitOptions = {
@@ -148,6 +150,8 @@ function Main() {
         console.log(fee);
         alert(`You will be charged ${fee} amount of DAI ${biconomy.daiTokenAddress} for this transaction`);
         showInfoMessage(`Signing message for meta transaction`);
+        setWait("Signing meta transaction")
+
 
         const nonce = await daiToken.methods.nonces(userAddress).call();
         console.log(`nonce is : ${nonce}`);
@@ -201,6 +205,8 @@ function Main() {
       
         //signature of this method is sendTxEIP712({req, signature = null, userAddress, metaInfo})
         let transaction = await ercForwarderClient.permitAndSendTxEIP712({req:tx, metaInfo: metaInfo});
+        setWait("Sending meta transaction")
+
 
         //returns an object containing code, log, message, txHash 
         console.log(transaction);
@@ -211,6 +217,7 @@ function Main() {
             console.log(receipt);
             setTransactionHash(receipt.transactionHash);
             showSuccessMessage("Transaction confirmed on chain");
+            setWait("")
             getQuoteFromNetwork();
           }
         } else {
@@ -309,10 +316,10 @@ function Main() {
         <div>
         {
             selectedAddress ? 
-            <p>{selectedAddress.toUpperCase()}</p> :
-            <button className={`bg-black text-white p-2 rounded hover:bg-opacity-70`}>Connect Wallet</button>
+            <p>{selectedAddress.toUpperCase()}</p> : <p>Connecting...</p>
         }
         </div>
+        <p className={`border bg-gray-500 text-white p-2 rounded`}>{wait !== "" ? `Please wait: ${wait}` : ''}</p>
         <p>{quote ? `${quote} is owned by: ${owner}` : ''}</p>
         <div className={`flex flex-col mt-6 border border-black p-4 rounded-md`}>
             <input 
@@ -325,6 +332,11 @@ function Main() {
                 className={`bg-black text-white p-2 rounded hover:bg-opacity-70 mt-4`}
                 onClick={onPermitAndSubmitEIP712}    
             >Submit Quote</button>
+        </div>
+        <div className={`pt-10`}>
+          <p>1. Get some test ether from faucet: <a href='https://faucets.chain.link/' className={`text-blue-600`}>Get Test Ether</a></p>
+          <p>2. Swap with some DAI from: <a href='https://app.uniswap.org/#/swap?chain=kovan' className={`text-blue-600`}>Swap</a></p>
+          <p>3. Set your own quote.</p>
         </div>
     </div>
 )
