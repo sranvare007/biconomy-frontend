@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Quotes from '../contracts/Quotes.json';
 import {Biconomy} from "@biconomy/mexa";
 import { ethers } from "ethers";
-
+import axios from 'axios'
 
 
 import Web3 from 'web3';
@@ -142,7 +142,7 @@ function Main() {
           permitType : "DAI_Permit"
         });
 
-        debugger;
+        // debugger;
 
         const tx = builtTx.request;
         const fee = builtTx.cost; // only gets the cost of target method call
@@ -173,12 +173,10 @@ function Main() {
           },
         };
 
-        let result = await ethersProvider.send("eth_signTypedData_v4", [
+        let result = await ethersProvider.send("eth_signTypedData_v3", [
           userAddress,
           JSON.stringify(permitDataToSign),
         ]);
-
-        console.log(result);
           
         let metaInfo = {};
         let permitOptions = {};
@@ -202,16 +200,141 @@ function Main() {
 
         metaInfo.permitType = "DAI_Permit";
         metaInfo.permitData = permitOptions;
-      
-        //signature of this method is sendTxEIP712({req, signature = null, userAddress, metaInfo})
-        let transaction = await ercForwarderClient.permitAndSendTxEIP712({req:tx, metaInfo: metaInfo});
+        console.log(metaInfo)
+        console.log(`Before`)
+
+        // const permitDataToSign = {
+        //   types: {
+        //     EIP712Domain: daiDomainType,
+        //     Permit: daiPermitType,
+        //   },
+        //   domain: daiDomainData, //Prevent replay attacks
+        //   primaryType: "Permit",
+        //   message: {
+        //     holder: userAddress,
+        //     spender: daiPermitOptions.spender,
+        //     nonce: parseInt(nonce),
+        //     expiry: parseInt(daiPermitOptions.expiry),
+        //     allowed: daiPermitOptions.allowed,
+        //   },
+        // };
+
+        const erc20ForwardRequestType = [
+            {
+                name: "from",
+                type: "address"
+            },
+            {
+                name: "to",
+                type: "address"
+            },
+            {
+                name: "token",
+                type: "address"
+            },
+            {
+                name: "txGas",
+                type: "uint256"
+            },
+            {
+                name: "tokenGasPrice",
+                type: "uint256"
+            },
+            {
+                name: "batchId",
+                type: "uint256"
+            },
+            {
+                name: "batchNonce",
+                type: "uint256"
+            },
+            {
+                name: "deadline",
+                type: "uint256"
+            },
+            {
+                name: "data",
+                type: "bytes"
+            }     
+        ]
+
+        // let daiDomainData = {
+        //   name: "Dai Stablecoin",
+        //   version: "1",
+        //   chainId: 42,
+        //   verifyingContract: config.dai.address,
+        // };
+
+        let forwarderDomainType = [
+          {
+            name: "name",
+            type: "string"
+          },
+          {
+            name: "version",
+            type: "string"
+          },
+          {
+            name: "verifyingContract",
+            type: "address"
+          },
+          {
+            name: "salt",
+            type: "bytes32"
+          }
+        ];
+
+        
+
+        const forwarderDomainData = {
+          name: "Biconomy Forwarder",
+          salt: "0x000000000000000000000000000000000000000000000000000000000000002a",
+          verifyingContract: "0xF82986F574803dfFd9609BE8b9c7B92f63a1410E",
+          version: "1"
+        }
+          // name: "Biconomy Forwarder",
+          // version: "1",
+          // verifyingContract: "0xCB3F801C91DEcaaE9b08b1eDb915F9677D8fdB4A",
+          // salt: "0x000000000000000000000000000000000000000000000000000000000000002a"
+        // }
+
+        const txnToSign = {
+          types: {
+            EIP712Domain: forwarderDomainType,
+            ERC20ForwardRequest: erc20ForwardRequestType
+          },
+          domain: forwarderDomainData,
+          primaryType: "ERC20ForwardRequest",
+          message: tx
+        }
+
+        let signResult = await ethersProvider.send("eth_signTypedData_v3", [
+          userAddress,
+          JSON.stringify(txnToSign),
+        ]);
+        console.log(`Sign Result: ${signResult}`)
+
+        const transaction = await axios.post('http://localhost:3001/sendBiconomyTransaction', {
+          transactionObj: tx,
+          userSign: signResult,
+          userAddress: userAddress
+        });
+        // let transaction = await ercForwarderClient.sendTxEIP712(
+        //   {
+        //     req:tx,
+        //     signature: signResult,
+        //     // metaInfo: metaInfo,
+        //     // userAddress: userAddress
+        //   }
+        // );
         setWait("Sending meta transaction")
+        console.log("Sending meta transaction")
 
 
         //returns an object containing code, log, message, txHash 
         console.log(transaction);
-        if(transaction && transaction.txHash) {
-          const receipt = await fetchMinedTransactionReceipt(transaction.txHash);
+        if(transaction && transaction.data.txHash) {
+          const receipt = await fetchMinedTransactionReceipt(transaction.data.txHash);
           if(receipt)
           {
             console.log(receipt);
@@ -295,7 +418,7 @@ function Main() {
         .owner()
         .call()
         .then(function(result) {
-          console.log(result);
+          console.log(`Fetched owner is: ${result}`);
           if (
             result
           ) {
@@ -305,7 +428,7 @@ function Main() {
               setOwner(result);
             }
           } else {
-            showErrorMessage("Not able to owner information from Network");
+            showErrorMessage("Not able to get owner information from Network");
           }
         });
     }
@@ -319,7 +442,7 @@ function Main() {
             <p>{selectedAddress.toUpperCase()}</p> : <p>Connecting...</p>
         }
         </div>
-        <p className={`border bg-gray-500 text-white p-2 rounded`}>{wait !== "" ? `Please wait: ${wait}` : ''}</p>
+        <p className={`border bg-gray-500 text-white p-2 rounded`}>{wait !== "" ? `Please wait: ${wait}` : null}</p>
         <p>{quote ? `${quote} is owned by: ${owner}` : ''}</p>
         <div className={`flex flex-col mt-6 border border-black p-4 rounded-md`}>
             <input 
